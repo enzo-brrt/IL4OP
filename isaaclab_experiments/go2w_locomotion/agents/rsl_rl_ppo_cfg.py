@@ -23,3 +23,11 @@ class Go2WFlatZPPORunnerCfg(UnitreeGo2WFlatPPORunnerCfg):
 
         self.max_iterations = 100000
         self.experiment_name = "unitree_go2w_flat_z"
+
+@configclass
+class Go2WFlatRollPPORunnerCfg(UnitreeGo2WFlatPPORunnerCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.max_iterations = 100000
+        self.experiment_name = "unitree_go2w_flat_roll"

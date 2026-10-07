@@ -8,6 +8,7 @@ Three variants are registered:
 * ``IL4OP-Velocity-Flat-Unitree-Go2W-v0``   - flat terrain
 * ``IL4OP-Velocity-Rough-Unitree-Go2W-v0``  - rough terrain with curriculum
 * ``IL4OP-Velocity-Flat-Z-Unitree-Go2W-v0`` - flat terrain with a commanded base height
+* ``IL4OP-Velocity-Flat-Roll-Unitree-Go2W-v0`` - flat terrain with a commanded base roll
 """
 
 import gymnasium as gym
@@ -30,6 +31,7 @@ from . import agents
 FLAT_ENV_ID = "IL4OP-Velocity-Flat-Unitree-Go2W-v0"
 ROUGH_ENV_ID = "IL4OP-Velocity-Rough-Unitree-Go2W-v0"
 FLAT_Z_ENV_ID = "IL4OP-Velocity-Flat-Z-Unitree-Go2W-v0"
+FLAT_ROLL_ENV_ID = "IL4OP-Velocity-Flat-Roll-Unitree-Go2W-v0"
 
 gym.register(
     id=FLAT_ENV_ID,
@@ -58,5 +60,15 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": f"{__name__}.flat_z_env_cfg:Go2WFlatZEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:Go2WFlatZPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id=FLAT_ROLL_ENV_ID,
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.flat_roll_env_cfg:Go2WFlatRollEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:Go2WFlatRollPPORunnerCfg",
     },
 )

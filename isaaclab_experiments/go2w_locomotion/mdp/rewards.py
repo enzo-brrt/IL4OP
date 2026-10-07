@@ -1,9 +1,15 @@
-"""Reward terms for the Go2W locomotion task with a commanded base height.
+"""Reward terms for the Go2W locomotion task with a commanded base height and a commanded base roll.
 
-These terms were reconstructed from the resolved configuration of the
-``unitree_go2w_flat_z`` training runs (``logs/rsl_rl/unitree_go2w_flat_z/*/params/env.yaml``)
-after the original source was lost. Function names and parameters match the
-runs exactly; the bodies follow the conventions of ``robot_lab``'s reward terms.
+The terms ``base_height_penalty``, ``go2w_joint_mirror`` and ``wheel_position_penalty`` were
+reconstructed from the resolved configuration of the ``unitree_go2w_flat_z`` training runs
+(``logs/rsl_rl/unitree_go2w_flat_z/*/params/env.yaml``) after the original source was lost.
+Their names and parameters match the runs exactly; their bodies follow the conventions of
+``robot_lab``'s reward terms.
+
+Added for the commanded-roll task :
+- ``track_base_roll_penalty``: squared error between the base roll and its target.
+- ``_roll_scale``: fades out a penalty as a base roll is commanded. It is applied to
+  ``go2w_joint_mirror`` and ``wheel_position_penalty``, which would otherwise oppose the tilt.
 """
 
 from __future__ import annotations
@@ -17,6 +23,9 @@ from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import RayCaster
 
+from .commands import base_quat_to_roll
+from isaaclab.utils.math import wrap_to_pi
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
@@ -24,6 +33,14 @@ if TYPE_CHECKING:
 def _upright_scale(env: ManagerBasedRLEnv) -> torch.Tensor:
     """Fade a penalty out as the robot tips over, as done by robot_lab's reward terms."""
     return torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+
+def _roll_scale(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """Fade a penalty out as a base roll is commanded."""
+    if "base_roll" not in env.command_manager.active_terms:
+        return torch.ones(env.num_envs, device=env.device)
+    roll_cmd = env.command_manager.get_command("base_roll")[:, 0]
+    return torch.clamp(1.0 - roll_cmd.abs() / 0.3 , 0.1, 1.0) 
+    # 0.3 = max_roll -> @configclass class Go2WFlatRollCommandsCfg(CommandsCfg) -> ranges=mdp.UniformBaseRollCommandCfg.Ranges(min_roll=-0.3, max_roll=0.3)
 
 
 def base_height_penalty(
@@ -57,6 +74,26 @@ def base_height_penalty(
     reward = torch.square(asset.data.root_pos_w[:, 2] - target)
     return reward * _upright_scale(env)
 
+def track_base_roll_penalty(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg,
+    target_roll: float | None = None,
+    command_name: str | None = None,
+) -> torch.Tensor:
+    """Squared error between the base roll and its target
+    The target is ``target_roll`` when given, otherwise the value of the
+    ``command_name`` command (see :class:`~.commands.UniformBaseRollCommand`).
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    if target_roll is not None:
+        target = torch.full((env.num_envs,), target_roll, device=env.device)
+    else:
+        target = env.command_manager.get_command(command_name)[:, 0]
+    
+    roll = base_quat_to_roll(asset)
+    error = math_utils.wrap_to_pi(roll - target)
+    reward =  torch.square(error)
+    return reward
 
 def go2w_joint_mirror(
     env: ManagerBasedRLEnv,
@@ -99,7 +136,7 @@ def go2w_joint_mirror(
     symmetry_scale = torch.clamp(1.0 - yaw_cmd / yaw_max, min=min_symmetry_scale, max=1.0)
 
     reward = (mirror_error + hip_reference_weight * hip_error) * symmetry_scale
-    return reward * _upright_scale(env)
+    return reward * _roll_scale(env) * _upright_scale(env)
 
 
 def wheel_position_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
@@ -124,4 +161,4 @@ def wheel_position_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) ->
     offset_b = math_utils.quat_apply_inverse(quat.reshape(-1, 4), offset_w.reshape(-1, 3)).reshape(offset_w.shape)
 
     reward = torch.sum(torch.square(offset_b[..., :2]), dim=(1, 2))
-    return reward * _upright_scale(env)
+    return reward * _roll_scale(env) * _upright_scale(env)
