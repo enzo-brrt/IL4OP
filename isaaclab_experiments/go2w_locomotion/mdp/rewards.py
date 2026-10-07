@@ -39,7 +39,7 @@ def _roll_scale(env: ManagerBasedRLEnv) -> torch.Tensor:
     if "base_roll" not in env.command_manager.active_terms:
         return torch.ones(env.num_envs, device=env.device)
     roll_cmd = env.command_manager.get_command("base_roll")[:, 0]
-    return torch.clamp(1.0 - roll_cmd.abs() / 0.3 , 0.1, 1.0) 
+    return torch.clamp(1.0 - roll_cmd.abs() / 0.4 , 0.1, 1.0) 
     # 0.3 = max_roll -> @configclass class Go2WFlatRollCommandsCfg(CommandsCfg) -> ranges=mdp.UniformBaseRollCommandCfg.Ranges(min_roll=-0.3, max_roll=0.3)
 
 

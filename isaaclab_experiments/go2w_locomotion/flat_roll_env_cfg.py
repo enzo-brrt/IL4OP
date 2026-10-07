@@ -35,11 +35,18 @@ class Go2WFlatRollCommandsCfg(CommandsCfg):
         asset_name="robot",
         resampling_time_range=(10.0, 10.0),
         debug_vis=True,
-        ranges=mdp.UniformBaseRollCommandCfg.Ranges(min_roll=-0.3, max_roll=0.3) 
+        ranges=mdp.UniformBaseRollCommandCfg.Ranges(min_roll=-0.4, max_roll=0.4) 
        # if max_roll change, change max_roll of _roll_scale function in rewards.py too
        # range roll: Range [-0.75~0.75] (rad); pitch: Range [-0.75~0.75] (rad); yaw: Range [-0.6~0.6] (rad).
        # https://support.unitree.com/home/en/developer/Motion_Services_Interface_V2.04
     )
+
+    base_height = mdp.UniformBaseHeightCommandCfg(
+            asset_name="robot",
+            resampling_time_range=(10.0, 10.0),
+            debug_vis=True,
+            ranges=mdp.UniformBaseHeightCommandCfg.Ranges(min_height=0.4, max_height=0.4) 
+        )
 
 @configclass
 class Go2WFlatRollObservationsCfg:
@@ -171,17 +178,17 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
         )
 
         # ------------------------------Rewards------------------------------
-        """# track the commanded base height, measured from the terrain under the base
+        # track the commanded base height, measured from the terrain under the base
         self.rewards.base_height_l2 = RewTerm(
             func=mdp.base_height_penalty,
-            weight=-100.0,
+            weight=-40.0,
             params={
                 "asset_cfg": SceneEntityCfg("robot", body_names=self.base_link_name),
                 "sensor_cfg": SceneEntityCfg("height_scanner_base"),
-                "target_height": None,
+                "target_height": 0.40,
                 "command_name": "base_height",
             },
-        )"""
+        )
 
         # track the commanded base roll
         self.rewards.roll_l2 = RewTerm(
@@ -196,13 +203,15 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
 
         # replaced by go2w_joint_mirror_error and wheel_position_penalty
         
-        self.rewards.joint_mirror.weight = 0
         self.rewards.joint_pos_penalty.weight = 0
         self.rewards.joint_acc_wheel_l2.weight = 0
         self.rewards.go2w_joint_mirror_error.weight = 0
-        self.rewards.wheel_position_penalty.weight = 0
 
-        # On peut en ajouter plus mais on verra après
+        self.rewards.joint_mirror.weight = -0.1
+        self.rewards.joint_mirror.params["mirror_joints"] = [
+        ["FL_(hip|thigh|calf)_joint", "RL_(hip|thigh|calf)_joint"],
+        ["FR_(hip|thigh|calf)_joint", "RR_(hip|thigh|calf)_joint"],
+        ]
 
         # If the weight of rewards is 0, set rewards to None
         if self.__class__.__name__ == "Go2WFlatRollEnvCfg":
