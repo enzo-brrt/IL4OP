@@ -203,11 +203,11 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
 
         # replaced by go2w_joint_mirror_error and wheel_position_penalty
         
-        self.rewards.joint_pos_penalty.weight = 0
+        self.rewards.joint_pos_penalty.weight = -0.05
         self.rewards.joint_acc_wheel_l2.weight = 0
-        self.rewards.go2w_joint_mirror_error.weight = 0
+        self.rewards.go2w_joint_mirror_error.weight = -0.05
 
-        self.rewards.joint_mirror.weight = -0.1
+        self.rewards.joint_mirror.weight = -0.2
         self.rewards.joint_mirror.params["mirror_joints"] = [
         ["FL_(hip|thigh|calf)_joint", "RL_(hip|thigh|calf)_joint"],
         ["FR_(hip|thigh|calf)_joint", "RR_(hip|thigh|calf)_joint"],
@@ -216,3 +216,4 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
         # If the weight of rewards is 0, set rewards to None
         if self.__class__.__name__ == "Go2WFlatRollEnvCfg":
             self.disable_zero_weight_rewards()
+    
