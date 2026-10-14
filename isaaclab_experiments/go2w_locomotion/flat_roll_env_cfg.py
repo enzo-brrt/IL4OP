@@ -201,6 +201,20 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
                 },
             )
 
+        # track the commanded feet distance
+        
+        self.rewards.feet_distance_l2 = RewTerm(
+            func=mdp.feet_distance_xy_penalty,
+            weight=-2,
+            params={
+                "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
+                "stance_width": 0.30,
+                "stance_length": 0.40,
+                "tolerance_x":0.08,
+                "tolerance_y":0.04,
+            },
+        )
+
         # replaced by go2w_joint_mirror_error and wheel_position_penalty
         
         self.rewards.joint_pos_penalty.weight = -0.05

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 import torch
 
 import isaaclab.utils.math as math_utils
-from isaaclab.assets import Articulation
+from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import RayCaster
 
@@ -162,3 +162,47 @@ def wheel_position_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) ->
 
     reward = torch.sum(torch.square(offset_b[..., :2]), dim=(1, 2))
     return reward * _roll_scale(env) * _upright_scale(env)
+
+
+def feet_distance_xy_penalty(
+    env: ManagerBasedRLEnv,
+    stance_width: float,
+    stance_length: float,
+    tolerance_x: float,
+    tolerance_y: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    asset: RigidObject = env.scene[asset_cfg.name]
+
+    # Compute the current footstep positions relative to the root
+    cur_footsteps_translated = asset.data.body_link_pos_w[:, asset_cfg.body_ids, :] - asset.data.root_link_pos_w[
+        :, :
+    ].unsqueeze(1)
+
+    footsteps_in_body_frame = torch.zeros(env.num_envs, 4, 3, device=env.device)
+    for i in range(4):
+        footsteps_in_body_frame[:, i, :] = math_utils.quat_apply(
+            math_utils.quat_conjugate(asset.data.root_link_quat_w), cur_footsteps_translated[:, i, :]
+        )
+
+    # Desired x and y positions for each foot
+    stance_width_tensor = stance_width * torch.ones([env.num_envs, 1], device=env.device)
+    stance_length_tensor = stance_length * torch.ones([env.num_envs, 1], device=env.device)
+
+    desired_xs = torch.cat(
+        [stance_length_tensor / 2, stance_length_tensor / 2, -stance_length_tensor / 2, -stance_length_tensor / 2],
+        dim=1,
+    )
+    desired_ys = torch.cat(
+        [stance_width_tensor / 2, -stance_width_tensor / 2, stance_width_tensor / 2, -stance_width_tensor / 2], dim=1
+    )
+
+    # Compute differences in x and y
+    stance_diff_x = torch.clamp(torch.abs(desired_xs - footsteps_in_body_frame[:, :, 0]) - tolerance_x, min=0.0)
+    stance_diff_y = torch.clamp(torch.abs(desired_ys - footsteps_in_body_frame[:, :, 1]) - tolerance_y, min=0.0)
+
+    reward = torch.sum(torch.square(stance_diff_x) + torch.square(stance_diff_y), dim=1)
+    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+    
+
