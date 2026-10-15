@@ -1,32 +1,18 @@
 """Sim-to-sim validation: run an IL4OP policy in MuJoCo.
 
-The policy is the TorchScript file exported by ``play_rsl_rl.py --export``. This harness
-rebuilds, in MuJoCo, exactly the observation the policy saw in Isaac Lab and closes the
-loop with the same control rate, so a policy that behaves here is one step closer to the
-robot. What differs on purpose is the physics engine and the actuator model, which is the
-point of the exercise.
+Example for a Go2W policy trained to track a base-roll command:
+    python tools/sim2sim/play.py --robot go2w --policy PATH_TO_POLICY.pt --obs_dim 61 \
+        --roll 0.2 --command 0.5 0 0 --duration 15 --viewer
 
-    python tools/sim2sim/play.py --robot go1 \\
-        --policy logs/rsl_rl/unitree_go1_rough/20k_no_air_feet/exported/policy.pt \\
-        --command 1.0 0 0 --duration 10
-
-Add ``--viewer`` to watch it (needs a display), or ``--teleop`` to drive the robot
-yourself through the states a Unitree robot goes through: it starts folded on the floor,
-the controller stands it up and holds whatever posture it is given, and the legs are
-handed over only when asked -- to the trained policy, or to the walking this harness does
-without one. Neither needs the other, so ``--teleop`` runs without a policy at all:
-
-    python tools/sim2sim/play.py --robot go1 --teleop --control ramp
-
-The parts live in ``robot/``: ``specs`` what each robot is, ``simulation`` the model and
-its motors, ``kinematics`` where a leg can reach, ``controller`` the states the robot goes
-through, ``gait`` getting around without a policy, ``contact`` the contact estimator, and
-``teleop``, ``keyboard`` and ``session`` the driving.
+For a flat-roll policy, --roll is a target trunk roll in radians. It is inserted into the
+policy observation in the same position as the trained command in Isaac Lab; it does not
+directly tilt the MuJoCo model. Use a policy trained with the roll-command observation.
 """
 
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 
 import numpy as np
@@ -45,6 +31,8 @@ def main():
                              " default, used by the Go1 policies trained before STAND_POSE")
     parser.add_argument("--height", type=float, default=0.33,
                         help="base height command of the Go2W flat-z policies (0.25 - 0.40)")
+    parser.add_argument("--roll", type=float, default=None,
+                        help="target base-roll command in radians for a Go2W flat-roll policy")
     parser.add_argument("--command", type=float, nargs=3, default=[1.0, 0.0, 0.0],
                         metavar=("VX", "VY", "WZ"), help="base velocity command")
     parser.add_argument("--duration", type=float, default=10.0, help="seconds to simulate")
@@ -63,7 +51,17 @@ def main():
     if args.policy is None and not args.teleop:
         parser.error("--policy is needed for a scripted run; --teleop works without one")
 
-    sim = Sim2Sim(args.robot, args.policy, args.obs_dim, args.nominal)
+    if args.roll is not None:
+        if args.robot != "go2w":
+            parser.error("--roll is available only for the Go2W flat-roll policy")
+        if args.obs_dim != 61:
+            parser.error("--roll requires --obs_dim 61, matching Go2WFlatRollObservationsCfg")
+        if not -0.4 <= args.roll <= 0.4:
+            parser.error("--roll must be between -0.4 and 0.4 radians, the range used during training")
+        if args.teleop:
+            parser.error("--roll is a scripted policy command and cannot be combined with --teleop")
+
+    sim = Sim2Sim(args.robot, args.policy, args.obs_dim, args.nominal, roll_command=args.roll)
     sim.height_command = args.height
     sim.reset()
 
@@ -75,7 +73,8 @@ def main():
 
     dt = sim.model.opt.timestep * sim.cfg["decimation"]
     steps = int(args.duration / dt)
-    heights, vel_error, torques, yaw_rate = [], [], [], []
+    heights, vel_error, torques, yaw_rate, rolls = [], [], [], [], []
+    roll_errors = []
     start_xy = sim.data.qpos[:2].copy()
     fell_at = None
 
@@ -87,6 +86,11 @@ def main():
     for i in range(steps):
         sim.step(command)
         lin_vel_b, ang_vel_b = sim.base_velocity()
+        roll, _ = sim.attitude()
+        rolls.append(roll)
+        if args.roll is not None:
+            roll_error = (roll - args.roll + np.pi) % (2.0 * np.pi) - np.pi
+            roll_errors.append(abs(roll_error))
         heights.append(sim.data.qpos[2])
         vel_error.append(abs(lin_vel_b[0] - command[0]))
         yaw_rate.append(ang_vel_b[2])
@@ -101,6 +105,8 @@ def main():
 
     print(f"\npolicy   : {args.policy}")
     print(f"robot    : {args.robot}   command: vx={command[0]} vy={command[1]} wz={command[2]}")
+    if args.roll is not None:
+        print(f"roll command: {args.roll:+.3f} rad ({math.degrees(args.roll):+.1f} deg)")
     print(f"simulated: {steps * dt:.1f} s at {1 / dt:.0f} Hz")
     print("-" * 56)
     if fell_at is None:
@@ -108,6 +114,9 @@ def main():
     else:
         print(f"  FELL at {fell_at:.2f} s (base below {sim.cfg['fall_height']} m)")
     print(f"  base height   mean {np.mean(heights):.3f} m   min {np.min(heights):.3f} m")
+    print(f"  base roll     mean {np.mean(rolls):+.3f} rad   max abs {np.max(np.abs(rolls)):.3f} rad")
+    if roll_errors:
+        print(f"  roll error    mean {np.mean(roll_errors):.3f} rad   max {np.max(roll_errors):.3f} rad")
     print(f"  |vx - cmd|    mean {np.mean(vel_error):.3f} m/s")
     print(f"  |torque|      mean {np.mean(torques):.2f} Nm   max {np.max(torques):.2f} Nm")
     travelled = sim.data.qpos[:2] - start_xy

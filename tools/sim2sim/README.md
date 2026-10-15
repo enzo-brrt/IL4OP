@@ -18,6 +18,12 @@ python tools/sim2sim/play.py --robot go1 \
 # drive it yourself, as you would the real robot
 python tools/sim2sim/play.py --robot go1 --teleop --control ramp \
     --policy logs/rsl_rl/unitree_go1_rough/<run>/exported/policy.pt
+
+
+# validate a Go2W policy trained with the flat-roll command
+python tools/sim2sim/play.py --robot go2w \
+    --policy logs/rsl_rl/unitree_go2w_flat_roll/<run>/exported/policy.pt \
+    --obs_dim 61 --roll 0.2 --command 0.5 0 0 --duration 15 --viewer
 ```
 
 ## Before the first run
@@ -69,6 +75,12 @@ python isaaclab_experiments/play_rsl_rl.py --task IL4OP-Velocity-Rough-Unitree-G
 Pass `--obs_dim` for anything but the default 45: `49` for the Go1 contact-framework
 policies, `48` / `52` for Go1 policies trained while the base linear velocity was still in
 the observation, and `57` / `60` / `61` for Go2W flat / rough / flat-z.
+
+For a Go2W policy trained with `isaaclab_experiments/go2w_locomotion/flat_roll_env_cfg.py`,
+pass `--obs_dim 61 --roll <radians>`. In this mode `--roll` supplies the target base-roll
+command as an observation term; it does not directly rotate the simulated body. The flat-roll
+policy uses the same observation dimension as flat-z, but the command slot has a different
+meaning (roll instead of height), so use a checkpoint trained with the flat-roll configuration.
 
 A policy also has to be run with the nominal pose it was trained around, because that pose
 is the zero of both its action and the joint positions it reads. `--nominal legacy` is the

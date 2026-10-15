@@ -13,7 +13,8 @@ from .contact import ContactNet
 from .specs import ROBOTS
 
 class Sim2Sim:
-    def __init__(self, robot: str, policy_path: Path | None, obs_dim: int, nominal: str = "current"):
+    def __init__(self, robot: str, policy_path: Path | None, obs_dim: int, nominal: str = "current",
+                 roll_command: float | None = None):
         self.cfg = ROBOTS[robot]
         self.model = mujoco.MjModel.from_xml_path(str(self.cfg["scene"]))
         self.data = mujoco.MjData(self.model)
@@ -46,8 +47,18 @@ class Sim2Sim:
         self.damping_kd = per_joint(self.cfg["damping_kd"])
         self.rest_kp = per_joint(self.cfg["rest_kp"])
         self.rest_kd = per_joint(self.cfg["rest_kd"])
-        self.obs_spec = self.cfg.get(f"obs_{obs_dim}", self.cfg["obs"])
+        if roll_command is not None:
+            roll_obs_key = f"obs_{obs_dim}_roll"
+            if roll_obs_key not in self.cfg:
+                raise ValueError(
+                    f"{robot} has no roll-command observation layout for obs_dim={obs_dim}; "
+                    "the Go2W flat-roll policy expects --obs_dim 61"
+                )
+            self.obs_spec = self.cfg[roll_obs_key]
+        else:
+            self.obs_spec = self.cfg.get(f"obs_{obs_dim}", self.cfg["obs"])
         self.height_command = 0.0
+        self.roll_command = 0.0 if roll_command is None else float(roll_command)
         # only built when a policy asks for it: it runs a CNN+GRU at every step
         self.contact_net = ContactNet(self) if self.policy is not None and any(
             name == "contact_probabilities" for name, _ in self.obs_spec) else None
@@ -114,6 +125,7 @@ class Sim2Sim:
             "projected_gravity": gravity_b,
             "velocity_commands": command,
             "height_command": np.array([self.height_command]),
+            "roll_command": np.array([self.roll_command]),
             "joint_pos": joint_pos,
             "joint_vel": self.data.qvel[self.qvel_idx],            # the default velocity is zero
             "actions": self.actions,
