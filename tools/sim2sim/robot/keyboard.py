@@ -48,11 +48,14 @@ class TerminalKeys:
     care where they came from, and a key held down repeats here as it does anywhere else.
     """
 
-    ARROWS = {"A": 265, "B": 264, "C": 262, "D": 263}   # up, down, right, left
+    ARROWS = {"A": 265, "B": 264, "C": 262, "D": 263}        # up, down, right, left (ANSI)
+    WIN_ARROWS = {"H": 265, "P": 264, "M": 262, "K": 263}    # same keys, msvcrt codes
+    WINDOWS = os.name == "nt"
 
     def __init__(self):
         self.fd = sys.stdin.fileno()
         self.saved = None
+        self.active = False
 
     @property
     def usable(self) -> bool:
@@ -60,11 +63,13 @@ class TerminalKeys:
 
     def __enter__(self):
         if self.usable:
-            import termios
-            import tty
+            if not self.WINDOWS:
+                import termios
+                import tty
 
-            self.saved = termios.tcgetattr(self.fd)
-            tty.setcbreak(self.fd)      # keys arrive one at a time, and Ctrl-C still works
+                self.saved = termios.tcgetattr(self.fd)
+                tty.setcbreak(self.fd)      # keys arrive one at a time, and Ctrl-C still works
+            self.active = True
         return self
 
     def __exit__(self, *exc):
@@ -73,6 +78,7 @@ class TerminalKeys:
 
             termios.tcsetattr(self.fd, termios.TCSADRAIN, self.saved)
             self.saved = None
+        self.active = False
 
     def _read(self) -> str:
         return os.read(self.fd, 1).decode(errors="ignore")
@@ -80,10 +86,32 @@ class TerminalKeys:
     def _waiting(self, timeout: float = 0.0) -> bool:
         return bool(select.select([self.fd], [], [], timeout)[0])
 
+    def _poll_windows(self) -> list[int]:
+        import msvcrt
+
+        keys = []
+        while msvcrt.kbhit():
+            char = msvcrt.getwch()
+            if char in ("\x00", "\xe0"):            # special key: a second code follows
+                key = self.WIN_ARROWS.get(msvcrt.getwch())
+                if key is not None:
+                    keys.append(key)
+            elif char in ("\x1b", "\x03", "\x04"):  # escape, Ctrl-C, Ctrl-D
+                keys.append(256)
+            else:
+                upper = char.upper()
+                if len(upper) == 1:
+                    keys.append(ord(upper))
+        return keys
+
     def poll(self) -> list[int]:
         """Every key pressed since the last call."""
+        if not self.active:
+            return []
+        if self.WINDOWS:
+            return self._poll_windows()
         keys = []
-        while self.saved is not None and self._waiting():
+        while self._waiting():
             char = self._read()
             if not char:
                 break
