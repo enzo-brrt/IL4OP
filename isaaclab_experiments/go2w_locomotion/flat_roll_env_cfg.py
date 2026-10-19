@@ -67,6 +67,9 @@ class Go2WFlatRollObservationsCfg:
         velocity_commands = ObsTerm(
             func=mdp.generated_commands, params={"command_name": "base_velocity"}, clip=(-100.0, 100.0), scale=1.0
         )
+        height_command = ObsTerm(
+                    func=mdp.generated_commands, params={"command_name": "base_height"}, clip=(-100.0, 100.0), scale=1.0
+                )
         roll_command = ObsTerm(
             func=mdp.generated_commands, params={"command_name": "base_roll"}, clip=(-100.0, 100.0), scale=1.0
         )
@@ -103,6 +106,9 @@ class Go2WFlatRollObservationsCfg:
         velocity_commands = ObsTerm(
             func=mdp.generated_commands, params={"command_name": "base_velocity"}, clip=(-100.0, 100.0), scale=1.0
         )
+        height_command = ObsTerm(
+                    func=mdp.generated_commands, params={"command_name": "base_height"}, clip=(-100.0, 100.0), scale=1.0
+                )
         roll_command = ObsTerm(
             func=mdp.generated_commands, params={"command_name": "base_roll"}, clip=(-100.0, 100.0), scale=1.0
         )
@@ -185,7 +191,7 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
             params={
                 "asset_cfg": SceneEntityCfg("robot", body_names=self.base_link_name),
                 "sensor_cfg": SceneEntityCfg("height_scanner_base"),
-                "target_height": 0.40,
+                "target_height": None,
                 "command_name": "base_height",
             },
         )
