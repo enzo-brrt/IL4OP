@@ -82,6 +82,7 @@ ROBOTS = {
         "command_limits": (1.0, 1.0, 1.0),      # the ranges the policy was trained on
         "drive_limits": (0.6, 0.3, 0.8),        # and what driving it by hand asks for
         "height_limits": None,
+        "roll_limits": None,
         # the folded pose and the stand-up routine of the Unitree controller, taken from
         # unitree_rl_lab/deploy/robots/go2/config/config.yaml (FixStand: qs, kp, kd, ts)
         "folded": {j: (0.0 if "hip" in j else 1.36 if "thigh" in j else -2.65) for j in GO1_JOINTS},
@@ -114,6 +115,10 @@ ROBOTS = {
         "obs": [("base_lin_vel", 2.0), ("base_ang_vel", 0.25), ("projected_gravity", 1.0),
                 ("velocity_commands", 1.0), ("height_command", 1.0), ("joint_pos", 1.0),
                 ("joint_vel", 0.05), ("actions", 1.0)],
+        # 62 inputs: the flat-roll policy also sees its base-roll command
+        "obs_62": [("base_lin_vel", 2.0), ("base_ang_vel", 0.25), ("projected_gravity", 1.0),
+                        ("velocity_commands", 1.0), ("height_command", 1.0), ("roll_command", 1.0), ("joint_pos", 1.0),
+                        ("joint_vel", 0.05), ("actions", 1.0)],      
         # 60 inputs: the rough policy sees the base velocity but has no height command
         "obs_60": [("base_lin_vel", 2.0), ("base_ang_vel", 0.25), ("projected_gravity", 1.0),
                    ("velocity_commands", 1.0), ("joint_pos", 1.0), ("joint_vel", 0.05), ("actions", 1.0)],
@@ -123,6 +128,7 @@ ROBOTS = {
         "command_limits": (1.5, 1.0, 1.0),
         "drive_limits": (1.0, 0.4, 0.8),
         "height_limits": (0.25, 0.40),
+        "roll_limits": (-0.40, 0.40),
         # same routine, from unitree_rl_lab/deploy/robots/go2w/config/config.yaml
         "folded": {j: (0.0 if "hip" in j or "foot" in j else 1.36 if "thigh" in j else -2.65)
                    for j in GO2W_JOINTS},

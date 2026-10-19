@@ -43,7 +43,8 @@ class Teleop:
         65:  ("vy", +0.5),     68:  ("vy", -0.5),      # A / D
         81:  ("wz", +0.5),     69:  ("wz", -0.5),      # Q / E
         263: ("wz", +0.5),     262: ("wz", -0.5),      # left / right
-        82:  ("height", +1), 70: ("height", -1),  # R / F
+        82:  ("height", +1),   70: ("height", -1),  # R / F
+        67:  ("roll", +0.5),   86: ("roll", -0.5),  # C / V
     }
     POSTURE_KEYS = {
         87: (0, +1), 83: (0, -1),      # W / S   trunk forwards / backwards
@@ -55,7 +56,7 @@ class Teleop:
         81: (5, +1), 69: (5, -1),      # Q / E   turn left / right
         263: (5, +1), 262: (5, -1),    # left / right
     }
-    STEP = {"vx": 0.1, "vy": 0.1, "wz": 0.1, "height": 0.01}
+    STEP = {"vx": 0.1, "vy": 0.1, "wz": 0.1, "height": 0.01, "roll": 0.1}
     #: one press of a posture key, and how far the trunk may be asked to go: metres of
     #: travel along (x, y, z) and radians of turn about them
     POSTURE_STEP = np.array([0.01, 0.01, 0.01, 0.03, 0.03, 0.04])
@@ -64,14 +65,16 @@ class Teleop:
     #: 1 2 3 4 5 6
     STATE_KEYS = {49: "damping", 50: "stand", 51: "policy", 52: "sit", 53: "folded", 54: "walk"}
 
-    def __init__(self, cfg, height: float, mode: str = "sticky"):
+    def __init__(self, cfg, height: float, roll: float,  mode: str = "sticky"):
         if mode not in self.MODES:
             raise ValueError(f"control mode '{mode}' is not one of {self.MODES}")
         self.mode = mode
         self.limits = cfg["command_limits"]
         self.height_limits = cfg["height_limits"]
+        self.roll_limits = cfg["roll_limits"]
         self.command = np.zeros(3)
         self.height = height
+        self.roll = roll
         self.stop = False
         self.reset = False
         self.changed = True
@@ -104,6 +107,11 @@ class Teleop:
                     return
                 low, high = self.height_limits
                 self.height = float(np.clip(self.height + sign * self.STEP[axis], low, high))
+            elif axis == "roll":
+                if self.roll_limits is None:
+                    return
+                low, high = self.roll_limits
+                self.roll = float(np.clip(self.roll + sign * self.STEP[axis], low, high))
             elif self.mode == "sticky":
                 index = {"vx": 0, "vy": 1, "wz": 2}[axis]
                 limit = self.limits[index]
@@ -167,8 +175,10 @@ class Teleop:
             return (f"  trunk  x {x:+3.0f} y {y:+3.0f} z {z:+3.0f} cm   "
                     f"roll {roll:+3.0f} pitch {pitch:+3.0f} yaw {yaw:+3.0f}°   (Unitree control)")
         height = f"   height {self.height:.2f} m" if self.height_limits else ""
+        roll = f"   roll {self.roll:+.2f} rad" if self.roll_limits else ""
         return (f"  vx {self.command[0]:+.2f}   vy {self.command[1]:+.2f}   "
-                f"wz {self.command[2]:+.2f}{height}")
+                f"wz {self.command[2]:+.2f}{height}"
+                f"wz {self.command[2]:+.2f}{roll}")
 
 
 HELP = """
@@ -194,6 +204,7 @@ HELP = """
     A / D                    sideways speed
     Q / E  or  left / right  turn
     R / F                    base height        (Go2W only)
+    C / V                    base roll          (Go2W only)
     space                    stand still
     0                        reset the robot
     X or escape              quit

@@ -45,6 +45,8 @@ def main():
                              " default, used by the Go1 policies trained before STAND_POSE")
     parser.add_argument("--height", type=float, default=0.33,
                         help="base height command of the Go2W flat-z policies (0.25 - 0.40)")
+    parser.add_argument("--roll", type=float, default=0,
+                            help="base roll command of the Go2W flat-roll policies (-0.4 - 0.40)")
     parser.add_argument("--command", type=float, nargs=3, default=[1.0, 0.0, 0.0],
                         metavar=("VX", "VY", "WZ"), help="base velocity command")
     parser.add_argument("--duration", type=float, default=10.0, help="seconds to simulate")
@@ -65,17 +67,18 @@ def main():
 
     sim = Sim2Sim(args.robot, args.policy, args.obs_dim, args.nominal)
     sim.height_command = args.height
+    sim.roll_command = args.roll
     sim.reset()
 
     if args.teleop:
-        teleoperate(sim, args.height, args.control, args.keys, args.speed)
+        teleoperate(sim, args.height, args.roll, args.control, args.keys, args.speed)
         return
 
     command = np.array(args.command)
 
     dt = sim.model.opt.timestep * sim.cfg["decimation"]
     steps = int(args.duration / dt)
-    heights, vel_error, torques, yaw_rate = [], [], [], []
+    heights, roll, vel_error, torques, yaw_rate = [], [], [], [], []
     start_xy = sim.data.qpos[:2].copy()
     fell_at = None
 
@@ -88,6 +91,7 @@ def main():
         sim.step(command)
         lin_vel_b, ang_vel_b = sim.base_velocity()
         heights.append(sim.data.qpos[2])
+        roll.append(sim.attitude()[0])
         vel_error.append(abs(lin_vel_b[0] - command[0]))
         yaw_rate.append(ang_vel_b[2])
         torques.append(np.abs(sim.data.ctrl[sim.act_idx]).mean())
@@ -108,6 +112,13 @@ def main():
     else:
         print(f"  FELL at {fell_at:.2f} s (base below {sim.cfg['fall_height']} m)")
     print(f"  base height   mean {np.mean(heights):.3f} m   min {np.min(heights):.3f} m")
+    if any(name == "roll_command" for name, _ in sim.obs_spec):
+        rolls = np.array(roll)
+        settled = rolls[len(rolls) // 2:]
+        print(f"  roll          mean {np.mean(rolls):+.3f} rad   "
+              f"|roll - cmd| mean {np.mean(np.abs(rolls - args.roll)):.3f} rad (command {args.roll:+.2f})")
+        print(f"  roll settled  mean {np.mean(settled):+.3f} rad   "
+              f"|roll - cmd| mean {np.mean(np.abs(settled - args.roll)):.3f} rad (last {len(settled) * dt:.0f} s)")
     print(f"  |vx - cmd|    mean {np.mean(vel_error):.3f} m/s")
     print(f"  |torque|      mean {np.mean(torques):.2f} Nm   max {np.max(torques):.2f} Nm")
     travelled = sim.data.qpos[:2] - start_xy

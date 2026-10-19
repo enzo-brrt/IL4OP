@@ -48,6 +48,7 @@ class Sim2Sim:
         self.rest_kd = per_joint(self.cfg["rest_kd"])
         self.obs_spec = self.cfg.get(f"obs_{obs_dim}", self.cfg["obs"])
         self.height_command = 0.0
+        self.roll_command = 0.0
         # only built when a policy asks for it: it runs a CNN+GRU at every step
         self.contact_net = ContactNet(self) if self.policy is not None and any(
             name == "contact_probabilities" for name, _ in self.obs_spec) else None
@@ -114,6 +115,7 @@ class Sim2Sim:
             "projected_gravity": gravity_b,
             "velocity_commands": command,
             "height_command": np.array([self.height_command]),
+            "roll_command": np.array([self.roll_command]),
             "joint_pos": joint_pos,
             "joint_vel": self.data.qvel[self.qvel_idx],            # the default velocity is zero
             "actions": self.actions,
