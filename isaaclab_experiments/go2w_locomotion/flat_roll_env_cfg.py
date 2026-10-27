@@ -214,10 +214,10 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
             weight=-2,
             params={
                 "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
-                "stance_width": 0.30,
+                "stance_width": 0.38,
                 "stance_length": 0.40,
-                "tolerance_x":0.08,
-                "tolerance_y":0.04,
+                "tolerance_x":0.04,
+                "tolerance_y":0.02,
             },
         )
 

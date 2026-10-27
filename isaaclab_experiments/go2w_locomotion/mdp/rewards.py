@@ -180,9 +180,10 @@ def feet_distance_xy_penalty(
     ].unsqueeze(1)
 
     footsteps_in_body_frame = torch.zeros(env.num_envs, 4, 3, device=env.device)
+    base_yaw_quat = math_utils.yaw_quat(asset.data.root_link_quat_w)
     for i in range(4):
         footsteps_in_body_frame[:, i, :] = math_utils.quat_apply(
-            math_utils.quat_conjugate(asset.data.root_link_quat_w), cur_footsteps_translated[:, i, :]
+            math_utils.quat_conjugate(base_yaw_quat), cur_footsteps_translated[:, i, :]
         )
 
     # Desired x and y positions for each foot
