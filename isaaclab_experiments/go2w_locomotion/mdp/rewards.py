@@ -135,8 +135,8 @@ def go2w_joint_mirror(
     yaw_cmd = torch.abs(env.command_manager.get_command(command_name)[:, 2])
     symmetry_scale = torch.clamp(1.0 - yaw_cmd / yaw_max, min=min_symmetry_scale, max=1.0)
 
-    reward = (mirror_error + hip_reference_weight * hip_error) * symmetry_scale
-    return reward * _roll_scale(env) * _upright_scale(env)
+    reward = (mirror_error * symmetry_scale + hip_reference_weight * hip_error) * _roll_scale(env)
+    return reward * _upright_scale(env)
 
 
 def wheel_position_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
