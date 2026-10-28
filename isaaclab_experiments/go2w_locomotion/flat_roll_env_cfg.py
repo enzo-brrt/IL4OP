@@ -214,24 +214,33 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
             weight=-2,
             params={
                 "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
-                "stance_width": 0.38,
+                "stance_width": 0.30,
                 "stance_length": 0.40,
-                "tolerance_x":0.04,
-                "tolerance_y":0.02,
+                "tolerance_x": 0.08,
+                "tolerance_y": 0.04,
             },
         )
 
-        # replaced by go2w_joint_mirror_error and wheel_position_penalty
-        
+        self.rewards.go2w_joint_mirror_error = RewTerm(
+            func=mdp.go2w_joint_mirror,
+            weight=-0.2,
+            params={
+                "asset_cfg": SceneEntityCfg("robot"),
+                "command_name": "base_velocity",
+                "hip_reference_weight": 2.0,
+                "min_symmetry_scale": 0.75,
+                "yaw_max": 1.0,
+            },
+        )
+
         self.rewards.joint_pos_penalty.weight = -0.05
         self.rewards.joint_acc_wheel_l2.weight = 0
-        self.rewards.go2w_joint_mirror_error.weight = -0.2
         
 
         self.rewards.joint_mirror.weight = -0.2
         self.rewards.joint_mirror.params["mirror_joints"] = [
-        ["FL_(thigh|calf)_joint", "RL_(thigh|calf)_joint"],
-        ["FR_(thigh|calf)_joint", "RR_(thigh|calf)_joint"],
+            ["FL_(hip|thigh|calf)_joint", "RL_(hip|thigh|calf)_joint"],
+            ["FR_(hip|thigh|calf)_joint", "RR_(hip|thigh|calf)_joint"],
         ]
 
         # If the weight of rewards is 0, set rewards to None
