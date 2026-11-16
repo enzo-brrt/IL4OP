@@ -7,20 +7,20 @@ from dataclasses import MISSING
 from typing import TYPE_CHECKING
 
 import torch
-from isaaclab.utils.math import euler_xyz_from_quat, quat_from_euler_xyz, wrap_to_pi,quat_mul, yaw_quat
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import CommandTerm, CommandTermCfg
-from isaaclab.utils import configclass
-
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.markers.config import FRAME_MARKER_CFG
+from isaaclab.utils import configclass
+from isaaclab.utils.math import euler_xyz_from_quat, quat_from_euler_xyz, quat_mul, wrap_to_pi, yaw_quat
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
-def base_quat_to_roll(robot) -> torch.Tensor:
-    """Roll of the basis in the world coordinate system, in radians, in the interval [-pi, pi]."""
+
+def base_quat_to_roll(robot: Articulation) -> torch.Tensor:
+    """Roll of the base, in radians, wrapped to [-pi, pi]."""
     roll, _, _ = euler_xyz_from_quat(robot.data.root_quat_w)
     return wrap_to_pi(roll)
 
@@ -85,22 +85,12 @@ class UniformBaseHeightCommandCfg(CommandTermCfg):
     """Uniform sampling range of the target height (in meters)."""
 
 
-
-
-
-
-
-
-
-
-
-
 class UniformBaseRollCommand(CommandTerm):
     """Samples a target base roll uniformly within a range.
 
     The command is a single value per environment, resampled every
     ``resampling_time_range`` seconds. It is meant to be consumed by
-    :func:`~isaaclab_experiments.go2w_locomotion.mdp.rewards.base_roll_penalty`
+    :func:`~isaaclab_experiments.go2w_locomotion.mdp.rewards.track_base_roll_penalty`
     and exposed to the policy through ``mdp.generated_commands``.
     """
 
@@ -158,7 +148,7 @@ class UniformBaseRollCommand(CommandTerm):
         current_pos[:, 2] += 0.4
         goal_pos = pos.clone()
         goal_pos[:, 2] += 0.8
-        self.current_roll_visualizer.visualize(goal_pos, quat)
+        self.current_roll_visualizer.visualize(current_pos, quat)
         self.goal_roll_visualizer.visualize(goal_pos, goal_quat)
 
     def _update_command(self):

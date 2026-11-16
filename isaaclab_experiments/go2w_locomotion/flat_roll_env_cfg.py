@@ -2,9 +2,8 @@
 
 Extends :class:`~.flat_env_cfg.Go2WFlatEnvCfg` with a uniformly sampled base
 roll command that the policy must track while following velocity commands.
-The configuration reproduces the ``unitree_go2w_flat_z`` training runs
-(``logs/rsl_rl/unitree_go2w_flat_z``), including the observation layout, so
-their checkpoints remain loadable.
+The base height command of the flat-z task is kept in the observations, fixed
+at 0.4 m. Training runs are logged under ``logs/rsl_rl/unitree_go2w_flat_roll``.
 """
 
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
@@ -45,16 +44,17 @@ class Go2WFlatRollCommandsCfg(CommandsCfg):
             asset_name="robot",
             resampling_time_range=(10.0, 10.0),
             debug_vis=True,
-            ranges=mdp.UniformBaseHeightCommandCfg.Ranges(min_height=0.4, max_height=0.4) 
+            ranges=mdp.UniformBaseHeightCommandCfg.Ranges(min_height=0.4, max_height=0.4)
         )
 
 @configclass
 class Go2WFlatRollObservationsCfg:
-    """Observation groups with the roll command placed after the velocity command.
+    """Observation groups with the height and roll commands placed after the velocity command.
 
-    The term order defines the observation vector layout and must not change:
+    The term order defines the observation vector layout and must not change
+    (``tools/sim2sim/robot/specs.py`` mirrors it as ``obs_62``):
     base_lin_vel, base_ang_vel, projected_gravity, velocity_commands,
-    roll_command, joint_pos, joint_vel, actions.
+    height_command, roll_command, joint_pos, joint_vel, actions.
     """
 
     @configclass
@@ -232,6 +232,26 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
                 "yaw_max": 1.0,
             },
         )
+
+        # stand_still faded out when a base roll is commanded (see mdp.stand_still_roll);
+        # same weight, threshold and joints as stand_still: only the roll fade differs
+        self.rewards.stand_still_roll = RewTerm(
+            func=mdp.stand_still_roll,
+            weight=self.rewards.stand_still.weight,
+            params={
+                "command_name": "base_velocity",
+                "command_threshold": self.rewards.stand_still.params["command_threshold"],
+                "asset_cfg": SceneEntityCfg("robot", joint_names=self.leg_joint_names),
+                "roll_fade_range": 0.05,
+                "min_roll_scale": 0.1,
+            },
+        )
+        # replaced by stand_still_roll
+        self.rewards.stand_still.weight = 0
+
+        # penalise wheel spin at zero velocity command (drift at standstill);
+        # -0.1 makes a 0.1 m/s drift (~4.7 rad/s summed over the wheels) cost ~0.47 per step
+        self.rewards.wheel_vel_penalty.weight = -0.1
 
         self.rewards.joint_pos_penalty.weight = -0.05
         self.rewards.joint_acc_wheel_l2.weight = 0
