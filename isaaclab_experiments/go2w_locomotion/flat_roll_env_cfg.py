@@ -176,6 +176,8 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
         self.commands.base_velocity.ranges.lin_vel_x = (-1.5, 1.5)
         self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
+        # a teleoperated robot must stay still at zero command: 2% of standing envs was not enough
+        self.commands.base_velocity.rel_standing_envs = 0.1
 
         # ------------------------------Observations------------------------------
         # the base configuration removes the linear velocity from the policy; restore it
