@@ -7,12 +7,11 @@ Their names and parameters match the runs exactly; their bodies follow the conve
 ``robot_lab``'s reward terms.
 
 Added for the commanded-roll task:
-- ``track_base_roll_penalty``: squared error between the base roll and its target.
-- ``_roll_scale``: fades out a penalty as a base roll is commanded. It is applied to
-  ``go2w_joint_mirror`` and ``wheel_position_penalty``, which would otherwise oppose the tilt.
-- ``stand_still_roll``: robot_lab's ``stand_still``, faded out by ``_stand_still_roll_scale``
-  as soon as a base roll is commanded, since it would otherwise prevent any roll at standstill.
-- ``feet_distance_xy_penalty``: keeps the wheels at a nominal stance width and length.
+- ``track_base_roll_penalty``: squared error between the base roll and the commanded roll.
+- ``_roll_scale``: reduces a penalty when a base roll is commanded.
+- ``stand_still_roll``: ``stand_still``, reduced when a base roll is commanded.
+- ``base_lin_vel_still_penalty``: base speed when no velocity is commanded.
+- ``feet_distance_xy_penalty``: distance of the wheels to a nominal stance.
 """
 
 from __future__ import annotations
@@ -39,11 +38,11 @@ def _upright_scale(env: ManagerBasedRLEnv) -> torch.Tensor:
 
 
 def _roll_scale(env: ManagerBasedRLEnv) -> torch.Tensor:
-    """Fade a penalty out as a base roll is commanded."""
+    """Reduce a penalty when a base roll is commanded."""
     if "base_roll" not in env.command_manager.active_terms:
         return torch.ones(env.num_envs, device=env.device)
     roll_cmd = env.command_manager.get_command("base_roll")[:, 0]
-    # 0.4 is the max_roll of Go2WFlatRollCommandsCfg.base_roll: update both together
+    # 0.4 is max_roll in Go2WFlatRollCommandsCfg
     return torch.clamp(1.0 - roll_cmd.abs() / 0.4, 0.1, 1.0)
 
 
@@ -52,19 +51,13 @@ def _stand_still_roll_scale(
     roll_fade_range: float = 0.05,
     min_roll_scale: float = 0.1,
 ) -> torch.Tensor:
-    """Fade ``stand_still`` out as soon as a base roll is commanded.
+    """Reduce ``stand_still`` when a base roll is commanded.
 
-    Returns 1 when no roll is commanded, so the standing posture penalty is kept intact,
-    and decreases linearly to ``min_roll_scale``, reached at
-    ``|roll_cmd| = (1 - min_roll_scale) * roll_fade_range``.
-
-    Unlike :func:`_roll_scale` (fade over the full roll range, used while moving), the fade
-    is deliberately steep: ``stand_still`` is an L1 pull towards the default pose, which a
-    squared roll error cannot overcome for small roll commands (see :func:`stand_still_roll`).
+    Returns 1 when no roll is commanded, then goes down linearly to ``min_roll_scale``.
 
     Args:
-        roll_fade_range: Roll command (rad) over which the scale drops from 1 to its floor.
-        min_roll_scale: Floor of the scale. Sets the residual roll error at standstill.
+        roll_fade_range: Roll command (rad) over which the scale goes from 1 to its minimum.
+        min_roll_scale: Minimum value of the scale.
     """
     if "base_roll" not in env.command_manager.active_terms:
         return torch.ones(env.num_envs, device=env.device)
@@ -112,8 +105,7 @@ def track_base_roll_penalty(
 ) -> torch.Tensor:
     """Squared error between the base roll and its target.
 
-    The target is ``target_roll`` when given, otherwise the value of the
-    ``command_name`` command (see :class:`~.commands.UniformBaseRollCommand`).
+    The target is ``target_roll`` if given, otherwise the ``command_name`` command.
     """
     asset: Articulation = env.scene[asset_cfg.name]
     if target_roll is not None:
@@ -203,29 +195,31 @@ def stand_still_roll(
     roll_fade_range: float = 0.05,
     min_roll_scale: float = 0.1,
 ) -> torch.Tensor:
-    """robot_lab's ``stand_still`` penalty, faded out when a base roll is commanded.
+    """Penalize the leg joint deviation at standstill, reduced when a base roll is commanded.
 
-    At zero velocity command, ``stand_still`` penalises the L1 deviation of the leg joints
-    from their default pose. Tilting the base requires exactly that deviation, so the
-    unmodified term opposes ``track_base_roll_penalty`` at standstill.
-
-    Residual roll error at standstill (simplified model, at equilibrium)::
-
-        error ~= (|w_stand| * k * s) / (2 * |w_roll|)
-
-    with ``w_stand`` the weight of this term, ``w_roll`` the weight of the roll tracking
-    term, ``s`` the scale of :func:`_stand_still_roll_scale` and ``k`` the leg joint
-    deviation (sum of |dq|, rad) per radian of base roll. ``k ~= 4`` is an estimate
-    (~1.2 rad for 0.3 rad of roll), not a measurement.
-
-    With w_stand = 2, w_roll = 10 and k = 4, error ~= 0.4 * s: the unmodified term (s = 1)
-    allows no roll at all below ~0.2 rad, while ``min_roll_scale = 0.1`` leaves ~0.04 rad.
-    Lowering ``min_roll_scale`` or raising ``|w_roll|`` reduces the error, at the cost of a
-    weaker posture anchor while tilted. Changing either weight in the config changes it too.
-    Valid at standstill only; ``joint_pos_penalty`` is not faded and adds ~0.02 rad.
+    This is robot_lab's ``stand_still`` multiplied by :func:`_stand_still_roll_scale`.
     """
     reward = stand_still(env, command_name, command_threshold, asset_cfg)
     return reward * _stand_still_roll_scale(env, roll_fade_range, min_roll_scale)
+
+
+def base_lin_vel_still_penalty(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    command_threshold: float,
+    velocity_cap: float,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize the horizontal base speed when no velocity is commanded.
+
+    The speed is capped at ``velocity_cap``. The term is only active when the norm of the
+    velocity command is below ``command_threshold``.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    cmd = torch.linalg.norm(env.command_manager.get_command(command_name), dim=1)
+    body_vel = torch.linalg.norm(asset.data.root_lin_vel_b[:, :2], dim=1)
+    reward = torch.clamp(body_vel, max=velocity_cap) * (cmd < command_threshold)
+    return reward * _upright_scale(env)
 
 
 def feet_distance_xy_penalty(
@@ -236,17 +230,14 @@ def feet_distance_xy_penalty(
     tolerance_y: float,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """Squared distance of each wheel to its nominal stance position, beyond a tolerance.
+    """Penalize the distance of each wheel to its nominal stance position.
 
-    Wheel positions are taken relative to the base in its yaw-only frame, and compared to
-    a rectangle of ``stance_length`` by ``stance_width`` centred on the base. Offsets within
-    ``tolerance_x`` / ``tolerance_y`` are free.
-
-    ``asset_cfg.body_ids`` must list exactly four wheels in the order FL, FR, RL, RR.
+    Positions are measured from the base, in its yaw frame. Offsets smaller than
+    ``tolerance_x`` and ``tolerance_y`` are not penalized. The wheels must be given in the
+    order FL, FR, RL, RR.
     """
     asset: RigidObject = env.scene[asset_cfg.name]
 
-    # Compute the current footstep positions relative to the root
     cur_footsteps_translated = asset.data.body_link_pos_w[:, asset_cfg.body_ids, :] - asset.data.root_link_pos_w[
         :, :
     ].unsqueeze(1)
@@ -258,7 +249,6 @@ def feet_distance_xy_penalty(
             math_utils.quat_conjugate(base_yaw_quat), cur_footsteps_translated[:, i, :]
         )
 
-    # Desired x and y positions for each foot
     stance_width_tensor = stance_width * torch.ones([env.num_envs, 1], device=env.device)
     stance_length_tensor = stance_length * torch.ones([env.num_envs, 1], device=env.device)
 
@@ -270,7 +260,6 @@ def feet_distance_xy_penalty(
         [stance_width_tensor / 2, -stance_width_tensor / 2, stance_width_tensor / 2, -stance_width_tensor / 2], dim=1
     )
 
-    # Compute differences in x and y
     stance_diff_x = torch.clamp(torch.abs(desired_xs - footsteps_in_body_frame[:, :, 0]) - tolerance_x, min=0.0)
     stance_diff_y = torch.clamp(torch.abs(desired_ys - footsteps_in_body_frame[:, :, 1]) - tolerance_y, min=0.0)
 

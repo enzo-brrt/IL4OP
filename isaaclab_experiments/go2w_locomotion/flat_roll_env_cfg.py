@@ -1,9 +1,7 @@
 """Unitree Go2W flat-terrain locomotion with a commanded base roll.
 
-Extends :class:`~.flat_env_cfg.Go2WFlatEnvCfg` with a uniformly sampled base
-roll command that the policy must track while following velocity commands.
-The base height command of the flat-z task is kept in the observations, fixed
-at 0.4 m. Training runs are logged under ``logs/rsl_rl/unitree_go2w_flat_roll``.
+Extends :class:`~.flat_env_cfg.Go2WFlatEnvCfg` with a base roll command that the policy
+must track while following velocity commands. The base height command is fixed at 0.4 m.
 """
 
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
@@ -34,27 +32,25 @@ class Go2WFlatRollCommandsCfg(CommandsCfg):
         asset_name="robot",
         resampling_time_range=(10.0, 10.0),
         debug_vis=True,
-        ranges=mdp.UniformBaseRollCommandCfg.Ranges(min_roll=-0.4, max_roll=0.4) 
-       # if max_roll change, change max_roll of _roll_scale function in rewards.py too
-       # range roll: Range [-0.75~0.75] (rad); pitch: Range [-0.75~0.75] (rad); yaw: Range [-0.6~0.6] (rad).
-       # https://support.unitree.com/home/en/developer/Motion_Services_Interface_V2.04
+        # if max_roll changes, also change it in _roll_scale (mdp/rewards.py)
+        # Go2 limits: roll [-0.75, 0.75] rad, pitch [-0.75, 0.75] rad, yaw [-0.6, 0.6] rad
+        # https://support.unitree.com/home/en/developer/Motion_Services_Interface_V2.04
+        ranges=mdp.UniformBaseRollCommandCfg.Ranges(min_roll=-0.4, max_roll=0.4),
     )
 
     base_height = mdp.UniformBaseHeightCommandCfg(
-            asset_name="robot",
-            resampling_time_range=(10.0, 10.0),
-            debug_vis=True,
-            ranges=mdp.UniformBaseHeightCommandCfg.Ranges(min_height=0.4, max_height=0.4)
-        )
+        asset_name="robot",
+        resampling_time_range=(10.0, 10.0),
+        debug_vis=True,
+        ranges=mdp.UniformBaseHeightCommandCfg.Ranges(min_height=0.4, max_height=0.4),
+    )
+
 
 @configclass
 class Go2WFlatRollObservationsCfg:
-    """Observation groups with the height and roll commands placed after the velocity command.
+    """Observation groups with the height and roll commands after the velocity command.
 
-    The term order defines the observation vector layout and must not change
-    (``tools/sim2sim/robot/specs.py`` mirrors it as ``obs_62``):
-    base_lin_vel, base_ang_vel, projected_gravity, velocity_commands,
-    height_command, roll_command, joint_pos, joint_vel, actions.
+    The term order must not change: ``tools/sim2sim/robot/specs.py`` uses the same order.
     """
 
     @configclass
@@ -68,8 +64,8 @@ class Go2WFlatRollObservationsCfg:
             func=mdp.generated_commands, params={"command_name": "base_velocity"}, clip=(-100.0, 100.0), scale=1.0
         )
         height_command = ObsTerm(
-                    func=mdp.generated_commands, params={"command_name": "base_height"}, clip=(-100.0, 100.0), scale=1.0
-                )
+            func=mdp.generated_commands, params={"command_name": "base_height"}, clip=(-100.0, 100.0), scale=1.0
+        )
         roll_command = ObsTerm(
             func=mdp.generated_commands, params={"command_name": "base_roll"}, clip=(-100.0, 100.0), scale=1.0
         )
@@ -107,8 +103,8 @@ class Go2WFlatRollObservationsCfg:
             func=mdp.generated_commands, params={"command_name": "base_velocity"}, clip=(-100.0, 100.0), scale=1.0
         )
         height_command = ObsTerm(
-                    func=mdp.generated_commands, params={"command_name": "base_height"}, clip=(-100.0, 100.0), scale=1.0
-                )
+            func=mdp.generated_commands, params={"command_name": "base_height"}, clip=(-100.0, 100.0), scale=1.0
+        )
         roll_command = ObsTerm(
             func=mdp.generated_commands, params={"command_name": "base_roll"}, clip=(-100.0, 100.0), scale=1.0
         )
@@ -148,8 +144,8 @@ class Go2WFlatRollRewardsCfg(UnitreeGo2WRewardsCfg):
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             "command_name": "base_velocity",
-            "hip_reference_weight": 0.5,
-            "min_symmetry_scale": 0.25,
+            "hip_reference_weight": 2.0,
+            "min_symmetry_scale": 0.75,
             "yaw_max": 1.0,
         },
     )
@@ -159,6 +155,7 @@ class Go2WFlatRollRewardsCfg(UnitreeGo2WRewardsCfg):
         weight=-0.5,
         params={"asset_cfg": SceneEntityCfg("robot", body_names=WHEEL_BODY_NAMES)},
     )
+
 
 @configclass
 class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
@@ -176,7 +173,6 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
         self.commands.base_velocity.ranges.lin_vel_x = (-1.5, 1.5)
         self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
-        # a teleoperated robot must stay still at zero command: 2% of standing envs was not enough
         self.commands.base_velocity.rel_standing_envs = 0.1
 
         # ------------------------------Observations------------------------------
@@ -200,20 +196,19 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
 
         # track the commanded base roll
         self.rewards.roll_l2 = RewTerm(
-               func=mdp.track_base_roll_penalty,
-               weight=-10,
-               params={
-                   "asset_cfg": SceneEntityCfg("robot", body_names=self.base_link_name),
-                   "target_roll": None,
-                   "command_name": "base_roll"
-                },
-            )
+            func=mdp.track_base_roll_penalty,
+            weight=-10.0,
+            params={
+                "asset_cfg": SceneEntityCfg("robot", body_names=self.base_link_name),
+                "target_roll": None,
+                "command_name": "base_roll",
+            },
+        )
 
-        # track the commanded feet distance
-        
+        # keep the wheels at a nominal stance width and length
         self.rewards.feet_distance_l2 = RewTerm(
             func=mdp.feet_distance_xy_penalty,
-            weight=-2,
+            weight=-2.0,
             params={
                 "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
                 "stance_width": 0.30,
@@ -223,20 +218,7 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
             },
         )
 
-        self.rewards.go2w_joint_mirror_error = RewTerm(
-            func=mdp.go2w_joint_mirror,
-            weight=-0.2,
-            params={
-                "asset_cfg": SceneEntityCfg("robot"),
-                "command_name": "base_velocity",
-                "hip_reference_weight": 2.0,
-                "min_symmetry_scale": 0.75,
-                "yaw_max": 1.0,
-            },
-        )
-
-        # stand_still faded out when a base roll is commanded (see mdp.stand_still_roll);
-        # same weight, threshold and joints as stand_still: only the roll fade differs
+        # stand_still reduced when a base roll is commanded
         self.rewards.stand_still_roll = RewTerm(
             func=mdp.stand_still_roll,
             weight=self.rewards.stand_still.weight,
@@ -248,17 +230,25 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
                 "min_roll_scale": 0.1,
             },
         )
+
         # replaced by stand_still_roll
         self.rewards.stand_still.weight = 0
 
-        # penalise wheel spin at zero velocity command (drift at standstill);
-        # -0.1 makes a 0.1 m/s drift (~4.7 rad/s summed over the wheels) cost ~0.47 per step
-        self.rewards.wheel_vel_penalty.weight = -0.1
+        # base speed when no velocity is commanded
+        self.rewards.base_lin_vel_still = RewTerm(
+            func=mdp.base_lin_vel_still_penalty,
+            weight=-5.0,
+            params={
+                "command_name": "base_velocity",
+                "command_threshold": self.rewards.stand_still_roll.params["command_threshold"],
+                "velocity_cap": 0.15,
+                "asset_cfg": SceneEntityCfg("robot"),
+            },
+        )
 
+        self.rewards.wheel_vel_penalty.weight = -0.1
         self.rewards.joint_pos_penalty.weight = -0.05
         self.rewards.joint_acc_wheel_l2.weight = 0
-        
-
         self.rewards.joint_mirror.weight = -0.2
         self.rewards.joint_mirror.params["mirror_joints"] = [
             ["FL_(hip|thigh|calf)_joint", "RL_(hip|thigh|calf)_joint"],
@@ -268,4 +258,3 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
         # If the weight of rewards is 0, set rewards to None
         if self.__class__.__name__ == "Go2WFlatRollEnvCfg":
             self.disable_zero_weight_rewards()
-    

@@ -86,12 +86,10 @@ class UniformBaseHeightCommandCfg(CommandTermCfg):
 
 
 class UniformBaseRollCommand(CommandTerm):
-    """Samples a target base roll uniformly within a range.
+    """Sample a target base roll uniformly within a range.
 
-    The command is a single value per environment, resampled every
-    ``resampling_time_range`` seconds. It is meant to be consumed by
-    :func:`~isaaclab_experiments.go2w_locomotion.mdp.rewards.track_base_roll_penalty`
-    and exposed to the policy through ``mdp.generated_commands``.
+    The command is one value per environment, resampled every ``resampling_time_range``
+    seconds.
     """
 
     cfg: UniformBaseRollCommandCfg
@@ -169,8 +167,13 @@ class UniformBaseRollCommandCfg(CommandTermCfg):
         min_roll: float = MISSING
         max_roll: float = MISSING
 
-    current_roll_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(prim_path="/Visuals/Command/roll_current")
-    goal_roll_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(prim_path="/Visuals/Command/roll_goal")
-
     ranges: Ranges = MISSING
     """Uniform sampling range of the target roll (in radians)."""
+
+    current_roll_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/roll_current"
+    )
+    """Marker showing the current base orientation."""
+
+    goal_roll_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(prim_path="/Visuals/Command/roll_goal")
+    """Marker showing the target base orientation."""

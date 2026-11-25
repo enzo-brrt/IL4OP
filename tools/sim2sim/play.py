@@ -45,8 +45,8 @@ def main():
                              " default, used by the Go1 policies trained before STAND_POSE")
     parser.add_argument("--height", type=float, default=0.33,
                         help="base height command of the Go2W flat-z policies (0.25 - 0.40)")
-    parser.add_argument("--roll", type=float, default=0,
-                            help="base roll command of the Go2W flat-roll policies (-0.4 - 0.40)")
+    parser.add_argument("--roll", type=float, default=0.0,
+                        help="base roll command of the Go2W flat-roll policies (-0.40 - 0.40)")
     parser.add_argument("--command", type=float, nargs=3, default=[1.0, 0.0, 0.0],
                         metavar=("VX", "VY", "WZ"), help="base velocity command")
     parser.add_argument("--duration", type=float, default=10.0, help="seconds to simulate")
@@ -75,10 +75,13 @@ def main():
         return
 
     command = np.array(args.command)
-
     dt = sim.model.opt.timestep * sim.cfg["decimation"]
     steps = int(args.duration / dt)
     heights, roll, vel_error, torques, yaw_rate = [], [], [], [], []
+
+    settle_time = 5.0
+    observations = []
+    
     start_xy = sim.data.qpos[:2].copy()
     fell_at = None
 
@@ -89,12 +92,18 @@ def main():
 
     for i in range(steps):
         sim.step(command)
+
+        if i * dt > settle_time: 
+            observations.append(sim.observation(command).squeeze(0).numpy())
+        
+
         lin_vel_b, ang_vel_b = sim.base_velocity()
         heights.append(sim.data.qpos[2])
         roll.append(sim.attitude()[0])
         vel_error.append(abs(lin_vel_b[0] - command[0]))
         yaw_rate.append(ang_vel_b[2])
         torques.append(np.abs(sim.data.ctrl[sim.act_idx]).mean())
+
         if fell_at is None and sim.data.qpos[2] < sim.cfg["fall_height"]:
             fell_at = i * dt
         if viewer is not None:
@@ -125,6 +134,23 @@ def main():
     print(f"  travelled     {travelled[0]:+.2f} m forward, {travelled[1]:+.2f} m sideways")
     print(f"  yaw rate      mean {np.mean(yaw_rate):+.3f} rad/s (command {command[2]:+.2f})")
 
+    obs_array = np.array(observations)
+
+    np.set_printoptions(precision=3, suppress=True)
+    n_joints = len(sim.cfg["joints"])
+    sizes = {"height_command": 1, "roll_command": 1,
+             "joint_pos": n_joints, "joint_vel": n_joints, "actions": n_joints}
+
+    print(f"\nobservations recorded: {obs_array.shape} (after {settle_time:.0f} s of settling)")
+    print("joint order:", sim.cfg["joints"])
+    start = 0
+    for name, _ in sim.obs_spec:
+        size = sizes.get(name, 3)
+        block = obs_array[:, start:start + size]
+        print(f"{name:18s} mean {block.mean(axis=0)}")
+        print(f"{'':18s} std  {block.std(axis=0)}")
+        start += size
+    assert start == obs_array.shape[1], f"split covers {start} columns, observation has {obs_array.shape[1]}"
 
 if __name__ == "__main__":
     main()

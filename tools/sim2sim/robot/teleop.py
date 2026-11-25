@@ -43,8 +43,8 @@ class Teleop:
         65:  ("vy", +0.5),     68:  ("vy", -0.5),      # A / D
         81:  ("wz", +0.5),     69:  ("wz", -0.5),      # Q / E
         263: ("wz", +0.5),     262: ("wz", -0.5),      # left / right
-        82:  ("height", +1),   70: ("height", -1),  # R / F
-        67:  ("roll", +0.5),   86: ("roll", -0.5),  # C / V
+        82:  ("height", +1),   70:  ("height", -1),    # R / F
+        67:  ("roll", +0.5),   86:  ("roll", -0.5),    # C / V
     }
     POSTURE_KEYS = {
         87: (0, +1), 83: (0, -1),      # W / S   trunk forwards / backwards
@@ -65,7 +65,7 @@ class Teleop:
     #: 1 2 3 4 5 6
     STATE_KEYS = {49: "damping", 50: "stand", 51: "policy", 52: "sit", 53: "folded", 54: "walk"}
 
-    def __init__(self, cfg, height: float, roll: float,  mode: str = "sticky"):
+    def __init__(self, cfg, height: float, roll: float, mode: str = "sticky"):
         if mode not in self.MODES:
             raise ValueError(f"control mode '{mode}' is not one of {self.MODES}")
         self.mode = mode
@@ -177,8 +177,7 @@ class Teleop:
         height = f"   height {self.height:.2f} m" if self.height_limits else ""
         roll = f"   roll {self.roll:+.2f} rad" if self.roll_limits else ""
         return (f"  vx {self.command[0]:+.2f}   vy {self.command[1]:+.2f}   "
-                f"wz {self.command[2]:+.2f}{height}"
-                f"wz {self.command[2]:+.2f}{roll}")
+                f"wz {self.command[2]:+.2f}{height}{roll}")
 
 
 HELP = """

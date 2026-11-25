@@ -117,8 +117,8 @@ ROBOTS = {
                 ("joint_vel", 0.05), ("actions", 1.0)],
         # 62 inputs: the flat-roll policy also sees its base-roll command
         "obs_62": [("base_lin_vel", 2.0), ("base_ang_vel", 0.25), ("projected_gravity", 1.0),
-                        ("velocity_commands", 1.0), ("height_command", 1.0), ("roll_command", 1.0), ("joint_pos", 1.0),
-                        ("joint_vel", 0.05), ("actions", 1.0)],      
+                   ("velocity_commands", 1.0), ("height_command", 1.0), ("roll_command", 1.0),
+                   ("joint_pos", 1.0), ("joint_vel", 0.05), ("actions", 1.0)],
         # 60 inputs: the rough policy sees the base velocity but has no height command
         "obs_60": [("base_lin_vel", 2.0), ("base_ang_vel", 0.25), ("projected_gravity", 1.0),
                    ("velocity_commands", 1.0), ("joint_pos", 1.0), ("joint_vel", 0.05), ("actions", 1.0)],
