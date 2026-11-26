@@ -86,10 +86,10 @@ class UniformBaseHeightCommandCfg(CommandTermCfg):
 
 
 class UniformBaseRollCommand(CommandTerm):
-    """Sample a target base roll uniformly within a range.
+    """Samples a target base roll uniformly within a range.
 
-    The command is one value per environment, resampled every ``resampling_time_range``
-    seconds.
+    The command is a single value per environment, resampled every
+    ``resampling_time_range`` seconds.
     """
 
     cfg: UniformBaseRollCommandCfg

@@ -33,8 +33,6 @@ class Go2WFlatRollCommandsCfg(CommandsCfg):
         resampling_time_range=(10.0, 10.0),
         debug_vis=True,
         # if max_roll changes, also change it in _roll_scale (mdp/rewards.py)
-        # Go2 limits: roll [-0.75, 0.75] rad, pitch [-0.75, 0.75] rad, yaw [-0.6, 0.6] rad
-        # https://support.unitree.com/home/en/developer/Motion_Services_Interface_V2.04
         ranges=mdp.UniformBaseRollCommandCfg.Ranges(min_roll=-0.4, max_roll=0.4),
     )
 
@@ -48,9 +46,11 @@ class Go2WFlatRollCommandsCfg(CommandsCfg):
 
 @configclass
 class Go2WFlatRollObservationsCfg:
-    """Observation groups with the height and roll commands after the velocity command.
+    """Observation groups with the height and roll commands placed after the velocity command.
 
-    The term order must not change: ``tools/sim2sim/robot/specs.py`` uses the same order.
+    The term order defines the observation vector layout and must not change:
+    base_lin_vel, base_ang_vel, projected_gravity, velocity_commands,
+    height_command, roll_command, joint_pos, joint_vel, actions.
     """
 
     @configclass
@@ -139,7 +139,7 @@ class Go2WFlatRollRewardsCfg(UnitreeGo2WRewardsCfg):
     """Go2W rewards plus the terms specific to roll tracking."""
 
     go2w_joint_mirror_error = RewTerm(
-        func=mdp.go2w_joint_mirror,
+        func=mdp.go2w_joint_mirror_roll,
         weight=-0.2,
         params={
             "asset_cfg": SceneEntityCfg("robot"),
@@ -151,7 +151,7 @@ class Go2WFlatRollRewardsCfg(UnitreeGo2WRewardsCfg):
     )
 
     wheel_position_penalty = RewTerm(
-        func=mdp.wheel_position_penalty,
+        func=mdp.wheel_position_penalty_roll,
         weight=-0.5,
         params={"asset_cfg": SceneEntityCfg("robot", body_names=WHEEL_BODY_NAMES)},
     )
@@ -234,19 +234,6 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
         # replaced by stand_still_roll
         self.rewards.stand_still.weight = 0
 
-        # base speed when no velocity is commanded
-        self.rewards.base_lin_vel_still = RewTerm(
-            func=mdp.base_lin_vel_still_penalty,
-            weight=-5.0,
-            params={
-                "command_name": "base_velocity",
-                "command_threshold": self.rewards.stand_still_roll.params["command_threshold"],
-                "velocity_cap": 0.15,
-                "asset_cfg": SceneEntityCfg("robot"),
-            },
-        )
-
-        self.rewards.wheel_vel_penalty.weight = -0.1
         self.rewards.joint_pos_penalty.weight = -0.05
         self.rewards.joint_acc_wheel_l2.weight = 0
         self.rewards.joint_mirror.weight = -0.2
