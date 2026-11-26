@@ -8,11 +8,11 @@ from .controller import Controller
 from .keyboard import Console, TerminalKeys
 from .teleop import HELP, Teleop
 
-def teleoperate(sim: "Sim2Sim", height: float, roll: float, mode: str = "sticky", keys: str = "terminal",
-                speed: float = 1.0):
+def teleoperate(sim: "Sim2Sim", height: float, mode: str = "sticky", keys: str = "terminal",
+                speed: float = 1.0, roll: float = 0.0):
     import mujoco.viewer
 
-    teleop = Teleop(sim.cfg, height, roll, mode)
+    teleop = Teleop(sim.cfg, height, mode, roll=roll)
     controller = Controller(sim)
     controller.speed = speed
     sim.lie_down()

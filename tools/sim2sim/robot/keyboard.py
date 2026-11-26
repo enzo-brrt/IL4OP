@@ -48,8 +48,8 @@ class TerminalKeys:
     care where they came from, and a key held down repeats here as it does anywhere else.
     """
 
-    ARROWS = {"A": 265, "B": 264, "C": 262, "D": 263}        # up, down, right, left (ANSI)
-    WIN_ARROWS = {"H": 265, "P": 264, "M": 262, "K": 263}    # same keys, msvcrt codes
+    ARROWS = {"A": 265, "B": 264, "C": 262, "D": 263}   # up, down, right, left
+    WIN_ARROWS = {"H": 265, "P": 264, "M": 262, "K": 263}   # same keys on Windows
     WINDOWS = os.name == "nt"
 
     def __init__(self):

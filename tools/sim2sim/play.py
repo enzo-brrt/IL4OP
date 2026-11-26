@@ -71,17 +71,15 @@ def main():
     sim.reset()
 
     if args.teleop:
-        teleoperate(sim, args.height, args.roll, args.control, args.keys, args.speed)
+        teleoperate(sim, args.height, args.control, args.keys, args.speed, roll=args.roll)
         return
 
     command = np.array(args.command)
+
     dt = sim.model.opt.timestep * sim.cfg["decimation"]
     steps = int(args.duration / dt)
-    heights, roll, vel_error, torques, yaw_rate = [], [], [], [], []
-
-    settle_time = 5.0
-    observations = []
-    
+    heights, vel_error, torques, yaw_rate = [], [], [], []
+    rolls = []
     start_xy = sim.data.qpos[:2].copy()
     fell_at = None
 
@@ -92,18 +90,12 @@ def main():
 
     for i in range(steps):
         sim.step(command)
-
-        if i * dt > settle_time: 
-            observations.append(sim.observation(command).squeeze(0).numpy())
-        
-
         lin_vel_b, ang_vel_b = sim.base_velocity()
         heights.append(sim.data.qpos[2])
-        roll.append(sim.attitude()[0])
+        rolls.append(sim.attitude()[0])
         vel_error.append(abs(lin_vel_b[0] - command[0]))
         yaw_rate.append(ang_vel_b[2])
         torques.append(np.abs(sim.data.ctrl[sim.act_idx]).mean())
-
         if fell_at is None and sim.data.qpos[2] < sim.cfg["fall_height"]:
             fell_at = i * dt
         if viewer is not None:
@@ -122,35 +114,16 @@ def main():
         print(f"  FELL at {fell_at:.2f} s (base below {sim.cfg['fall_height']} m)")
     print(f"  base height   mean {np.mean(heights):.3f} m   min {np.min(heights):.3f} m")
     if any(name == "roll_command" for name, _ in sim.obs_spec):
-        rolls = np.array(roll)
-        settled = rolls[len(rolls) // 2:]
-        print(f"  roll          mean {np.mean(rolls):+.3f} rad   "
-              f"|roll - cmd| mean {np.mean(np.abs(rolls - args.roll)):.3f} rad (command {args.roll:+.2f})")
+        settled = np.array(rolls[len(rolls) // 2:])
         print(f"  roll settled  mean {np.mean(settled):+.3f} rad   "
-              f"|roll - cmd| mean {np.mean(np.abs(settled - args.roll)):.3f} rad (last {len(settled) * dt:.0f} s)")
+              f"|roll - cmd| mean {np.mean(np.abs(settled - args.roll)):.3f} rad "
+              f"(command {args.roll:+.2f}, last {len(settled) * dt:.0f} s)")
     print(f"  |vx - cmd|    mean {np.mean(vel_error):.3f} m/s")
     print(f"  |torque|      mean {np.mean(torques):.2f} Nm   max {np.max(torques):.2f} Nm")
     travelled = sim.data.qpos[:2] - start_xy
     print(f"  travelled     {travelled[0]:+.2f} m forward, {travelled[1]:+.2f} m sideways")
     print(f"  yaw rate      mean {np.mean(yaw_rate):+.3f} rad/s (command {command[2]:+.2f})")
 
-    obs_array = np.array(observations)
-
-    np.set_printoptions(precision=3, suppress=True)
-    n_joints = len(sim.cfg["joints"])
-    sizes = {"height_command": 1, "roll_command": 1,
-             "joint_pos": n_joints, "joint_vel": n_joints, "actions": n_joints}
-
-    print(f"\nobservations recorded: {obs_array.shape} (after {settle_time:.0f} s of settling)")
-    print("joint order:", sim.cfg["joints"])
-    start = 0
-    for name, _ in sim.obs_spec:
-        size = sizes.get(name, 3)
-        block = obs_array[:, start:start + size]
-        print(f"{name:18s} mean {block.mean(axis=0)}")
-        print(f"{'':18s} std  {block.std(axis=0)}")
-        start += size
-    assert start == obs_array.shape[1], f"split covers {start} columns, observation has {obs_array.shape[1]}"
 
 if __name__ == "__main__":
     main()
