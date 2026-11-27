@@ -204,6 +204,11 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
                 "command_name": "base_roll",
             },
         )
+        self.rewards.roll_exp = RewTerm(
+            func=mdp.track_base_roll_exp,
+            weight=3.0,
+            params={"command_name": "base_roll", "std": 0.1},
+        )
 
         # keep the wheels at a nominal stance width and length
         self.rewards.feet_distance_l2 = RewTerm(
@@ -233,6 +238,25 @@ class Go2WFlatRollEnvCfg(Go2WFlatEnvCfg):
 
         # replaced by stand_still_roll
         self.rewards.stand_still.weight = 0
+
+        # upward measured from the commanded base roll
+        self.rewards.upward_roll = RewTerm(
+            func=mdp.upward_roll,
+            weight=self.rewards.upward.weight,
+            params={"command_name": "base_roll"},
+        )
+        # replaced by upward_roll
+        self.rewards.upward.weight = 0
+
+        # keep the wheels still when no velocity is commanded
+        self.rewards.wheel_action_still = RewTerm(
+            func=mdp.wheel_action_still_penalty,
+            weight=-0.1,
+            params={
+                "command_name": "base_velocity",
+                "command_threshold": self.rewards.stand_still_roll.params["command_threshold"],
+            },
+        )
 
         self.rewards.joint_pos_penalty.weight = -0.05
         self.rewards.joint_acc_wheel_l2.weight = 0

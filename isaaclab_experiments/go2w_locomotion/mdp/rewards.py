@@ -162,6 +162,39 @@ def track_base_roll_penalty(
     return torch.square(error)
 
 
+def track_base_roll_exp(
+    env: ManagerBasedRLEnv, std: float, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Reward tracking of the base roll command using exponential kernel."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    target = env.command_manager.get_command(command_name)[:, 0]
+    error = math_utils.wrap_to_pi(base_quat_to_roll(asset) - target)
+    reward = torch.exp(-torch.square(error) / std**2)
+    return reward * _upright_scale(env)
+
+
+def upward_roll(
+    env: ManagerBasedRLEnv, command_name: str | None = None, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """robot_lab's ``upward``, measured in the frame of the commanded base roll."""
+    gravity = env.scene[asset_cfg.name].data.projected_gravity_b
+    if command_name is None:
+        return torch.square(1 - gravity[:, 2])
+    roll_cmd = env.command_manager.get_command(command_name)[:, 0]
+    gravity_z = torch.sin(roll_cmd) * gravity[:, 1] + torch.cos(roll_cmd) * gravity[:, 2]
+    return torch.square(1 - gravity_z)
+
+
+def wheel_action_still_penalty(
+    env: ManagerBasedRLEnv, command_name: str, command_threshold: float, action_name: str = "joint_vel"
+) -> torch.Tensor:
+    """Penalize the wheel velocity actions when the velocity command is very small."""
+    actions = env.action_manager.get_term(action_name).raw_actions
+    reward = torch.sum(torch.abs(actions), dim=1)
+    reward *= torch.norm(env.command_manager.get_command(command_name), dim=1) < command_threshold
+    return reward * _upright_scale(env)
+
+
 def go2w_joint_mirror_roll(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg,
